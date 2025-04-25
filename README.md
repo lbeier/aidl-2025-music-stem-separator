@@ -5,6 +5,7 @@ This project focuses on separating audio tracks into **vocal** and **accompanime
 
 > 🧑‍🎓 This is the **final project** for the **Artificial Intelligence with Deep Learning** postgraduate course at **Universitat Politècnica de Catalunya (UPC)**.
 
+![Stem Separation Example](https://source-separation.github.io/tutorial/_images/source_separation_io.png)
 
 ## 🧠 Objective
 
@@ -40,5 +41,6 @@ MVP in development. Currently working on:
 	•	Baseline model
 
 ## 📌 Notes
+
 	•	MUSDB18 is not included in this repo. Download it manually and place it in the data/ directory.
 	•	Model and evaluation scripts to follow.
