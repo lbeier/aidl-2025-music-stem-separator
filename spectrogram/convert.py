@@ -10,6 +10,7 @@ import stempeg
 from sample_downloader.download import MUSDB_SAMPLE_OUTPUT_PATH
 
 SPECTROGRAM_SAMPLE_OUTPUT_PATH= "{}/sample_data/spectograms"
+WAVEFORM_SAMPLE_OUTPUT_PATH= "{}/sample_data/waveforms"
 
 
 # --- Average stereo to mono for all signals ---
@@ -39,17 +40,32 @@ def save_spectrogram_image(mel_db, save_path, rate):
     plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
     plt.close()
 
+# --- Helper function to plot and save waveform without borders ---
+def save_waveform_image(signal, save_path, rate):
+    fig, ax = plt.subplots(figsize=(12, 3))  # waveform doesn't need 8 vertical inches
+    librosa.display.waveshow(signal, sr=rate, ax=ax)
+    plt.axis('off')
+    plt.margins(0)
+    plt.subplots_adjust(0, 0, 1, 1)
+    plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
+    plt.close()
+
 def convert():
     # Get the current working directory (assuming you run the script from project root)
     project_root = Path.cwd()
 
     # Define output directory for spectrogram files
-    output_dir = Path(SPECTROGRAM_SAMPLE_OUTPUT_PATH.format(project_root))
+    spectrogram_output_dir = Path(SPECTROGRAM_SAMPLE_OUTPUT_PATH.format(project_root))
+    waveform_output_dir = Path(WAVEFORM_SAMPLE_OUTPUT_PATH.format(project_root))
 
-    # --- Clean output directory ---
-    if output_dir.exists():
-        shutil.rmtree(output_dir)  # Delete everything inside output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)  # Recreate fresh
+    # --- Clean output directories ---
+    if spectrogram_output_dir.exists():
+        shutil.rmtree(spectrogram_output_dir)  # Delete everything inside spectrogram_output_dir
+    spectrogram_output_dir.mkdir(parents=True, exist_ok=True)  # Recreate fresh
+
+    if waveform_output_dir.exists():
+        shutil.rmtree(waveform_output_dir)  # Delete everything inside spectrogram_output_dir
+    waveform_output_dir.mkdir(parents=True, exist_ok=True)  # Recreate fresh
 
     # Define the MUSDB samples root directory
     musdb_root = Path(MUSDB_SAMPLE_OUTPUT_PATH.format(project_root))
@@ -84,14 +100,19 @@ def convert():
             instruments_mel_norm, instruments_mel_db = compute_normalized_mel(instruments, rate)
 
             # --- Save normalized mel spectrograms as .npy files ---
-            np.save(output_dir / f"{file.stem}_mix.npy", mix_mel_norm)
-            np.save(output_dir / f"{file.stem}_vocals.npy", vocals_mel_norm)
-            np.save(output_dir / f"{file.stem}_instruments.npy", instruments_mel_norm)
+            np.save(spectrogram_output_dir / f"{file.stem}_mix.npy", mix_mel_norm)
+            np.save(spectrogram_output_dir / f"{file.stem}_vocals.npy", vocals_mel_norm)
+            np.save(spectrogram_output_dir / f"{file.stem}_instruments.npy", instruments_mel_norm)
 
             # --- Save spectrogram plots as .png files ---
-            save_spectrogram_image(mix_mel_db, output_dir / f"{file.stem}_mix.png", rate)
-            save_spectrogram_image(vocals_mel_db, output_dir / f"{file.stem}_vocals.png", rate)
-            save_spectrogram_image(instruments_mel_db, output_dir / f"{file.stem}_instruments.png", rate)
+            save_spectrogram_image(mix_mel_db, spectrogram_output_dir / f"{file.stem}_mix.png", rate)
+            save_spectrogram_image(vocals_mel_db, spectrogram_output_dir / f"{file.stem}_vocals.png", rate)
+            save_spectrogram_image(instruments_mel_db, spectrogram_output_dir / f"{file.stem}_instruments.png", rate)
+
+            # --- Save waveform plots as .png files ---
+            save_waveform_image(vocals, waveform_output_dir / f"{file.stem}_vocals_waveform.png", rate)
+            save_waveform_image(instruments, waveform_output_dir / f"{file.stem}_instruments_waveform.png", rate)
+            save_waveform_image(mix, waveform_output_dir / f"{file.stem}_mix_waveform.png", rate)
 
             print(f"Saved .npy and .png for {file.stem}")
 
