@@ -1,3 +1,4 @@
+audioop-lts==0.2.1
 audioread==3.0.1
 certifi==2025.4.26
 cffi==1.17.1
@@ -41,10 +42,15 @@ setuptools==75.8.0
 six==1.17.0
 soundfile==0.13.1
 soxr==0.5.0.post1
+standard-aifc==3.13.0
+standard-chunk==3.13.0
+standard-sunau==3.13.0
 stempeg==0.2.3
 sympy==1.13.3
 threadpoolctl==3.6.0
 torch==2.7.0
+torchaudio==2.7.0
+torchvision==0.22.0
 tqdm==4.67.1
 typing_extensions==4.13.2
 urllib3==2.4.0
