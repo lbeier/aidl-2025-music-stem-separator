@@ -13,14 +13,19 @@ def train():
     """
 
     # --- Configuration ---
-    spectrogram_dir = "../../sample_data/spectrograms"  # Path to directory with .npy spectrograms
+    spectrogram_dir = "sample_data/spectrograms"  # Path to directory with .npy spectrograms
 
     lr = 1e-3              # Learning rate for optimizer
     batch_size = 8         # Number of samples per training batch
     num_epochs = 50        # Total number of epochs to train
 
-    # Select best device: CUDA if available, otherwise CPU
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Select best device: MPS (Mac GPU) if available, then CUDA, then CPU
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     print(f"Using device: {device}")
 
     # --- Dataset and Dataloader ---
