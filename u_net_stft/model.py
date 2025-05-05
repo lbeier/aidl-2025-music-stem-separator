@@ -8,17 +8,21 @@ class DoubleConv(nn.Module):
     Double Convolution Block:
     - Applies two consecutive convolution layers
     - Each followed by a ReLU activation
+    - Optionally applies Dropout after the second ReLU
     - Used as the basic building block inside U-Net
     """
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, dropout_p=0.0):
         super().__init__()
-        self.conv = nn.Sequential(
+        layers = [
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),  # 1st Conv layer
             nn.ReLU(inplace=True),  # 1st ReLU activation
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),  # 2nd Conv layer
             nn.ReLU(inplace=True)  # 2nd ReLU activation
-        )
+        ]
+        if dropout_p > 0.0:
+            layers.append(nn.Dropout2d(dropout_p))
+        self.conv = nn.Sequential(*layers)
 
     def forward(self, x):
         """
@@ -40,7 +44,7 @@ class UNetSmall(nn.Module):
     - Fewer feature maps to keep model small and fast
     """
 
-    def __init__(self, in_channels=1, out_channels=1, features=[32, 64, 128]):
+    def __init__(self, in_channels=1, out_channels=1, features=[32, 64, 128], dropout_p=0.3):
         """
         Initialize the U-Net.
 
@@ -48,6 +52,7 @@ class UNetSmall(nn.Module):
             in_channels (int): Number of input channels (e.g., 1 for mel-spectrograms)
             out_channels (int): Number of output channels (e.g., 1 if predicting a mask or spectrogram)
             features (list): Number of feature channels at each downsampling step
+            dropout_p (float): Dropout probability to use in DoubleConv blocks.
         """
         super().__init__()
 
@@ -58,11 +63,11 @@ class UNetSmall(nn.Module):
 
         # --- Build Encoder ---
         for feature in features:
-            self.downs.append(DoubleConv(in_channels, feature))  # Add DoubleConv
+            self.downs.append(DoubleConv(in_channels, feature, dropout_p=dropout_p))
             in_channels = feature  # Update in_channels for next layer
 
         # --- Bottleneck ---
-        self.bottleneck = DoubleConv(features[-1], features[-1] * 2)  # Deepest layer in the U
+        self.bottleneck = DoubleConv(features[-1], features[-1] * 2, dropout_p=dropout_p)
 
         # --- Build Decoder ---
         for feature in reversed(features):
@@ -70,7 +75,7 @@ class UNetSmall(nn.Module):
                 nn.ConvTranspose2d(feature * 2, feature, kernel_size=2, stride=2)
             )  # Upsampling (transposed convolution)
             self.ups.append(
-                DoubleConv(feature * 2, feature)
+                DoubleConv(feature * 2, feature, dropout_p=dropout_p)
             )  # Double conv after skip connection
 
         # --- Final output layer ---

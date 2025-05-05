@@ -64,7 +64,7 @@ Follow these steps in order:
 
    *   **Train Mel Model:**
        ```bash
-       python train.py --type mel --spectrogram_dir sample_data/spectrograms_mel --epochs 50 --batch_size 8 --lr 0.001 --val_split 0.2
+       python train.py --type mel --spectrogram_dir sample_data/spectrograms --epochs 50 --batch_size 8 --lr 0.001 --val_split 0.2
        ```
        *(Model saved to `u_net_mel/unet_small_mel.pth`, plot saved to `u_net_mel/unet_small_mel_loss_curve.png`)*
 
@@ -83,10 +83,9 @@ Follow these steps in order:
    ```bash
    python predict_wav.py \
        --model u_net_mel/unet_small_mel.pth \
-       --input_wav path/to/your/mix.wav \
+       --input_wav eval/mixture.wav \
        --output_vocals output/vocals.wav \
        --output_instruments output/instruments.wav \
-       --is_mel
    ```
    *Make sure the output directories exist or adjust the paths.*
    *The `--is_mel` flag is required when using the Mel model.*

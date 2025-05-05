@@ -1,0 +1,5 @@
+timestamp,model_type,num_epochs,batch_size,learning_rate,val_split,final_train_loss,final_val_loss,model_save_path,plot_save_path
+2025-05-02 14:47:29,mel,10,8,0.001,0.2,0.06032125990441684,0.04665103249622686,u_net_mel/unet_small_mel.pth,u_net_mel/unet_small_mel_loss_curve.png
+2025-05-02 17:43:52,stft,10,8,0.001,0.2,0.01859151243497681,0.018151506528730307,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
+2025-05-03 01:35:48,stft,4,4,0.0001,0.4,0.021656278000728734,0.018799896364108705,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
+2025-05-03 08:55:09,stft,20,8,0.0001,0.4,0.08964622285930639,0.0879763752154635,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
