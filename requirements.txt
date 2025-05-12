@@ -12,6 +12,7 @@ fonttools==4.57.0
 fsspec==2025.3.2
 future==1.0.0
 idna==3.10
+iniconfig==2.1.0
 Jinja2==3.1.6
 joblib==1.4.2
 kiwisolver==1.4.8
@@ -29,10 +30,12 @@ numpy==1.26.4
 packaging==25.0
 pillow==11.2.1
 platformdirs==4.3.7
+pluggy==1.5.0
 pooch==1.8.2
 pyaml==25.1.0
 pycparser==2.22
 pyparsing==3.2.3
+pytest==8.3.5
 python-dateutil==2.9.0.post0
 PyYAML==6.0.2
 requests==2.32.3
@@ -50,6 +53,7 @@ sympy==1.13.3
 threadpoolctl==3.6.0
 torch==2.7.0
 torchaudio==2.7.0
+torchlibrosa==0.1.0
 torchvision==0.22.0
 tqdm==4.67.1
 typing_extensions==4.13.2

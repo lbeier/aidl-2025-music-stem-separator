@@ -3,3 +3,7 @@ timestamp,model_type,num_epochs,batch_size,learning_rate,val_split,final_train_l
 2025-05-02 17:43:52,stft,10,8,0.001,0.2,0.01859151243497681,0.018151506528730307,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
 2025-05-03 01:35:48,stft,4,4,0.0001,0.4,0.021656278000728734,0.018799896364108705,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
 2025-05-03 08:55:09,stft,20,8,0.0001,0.4,0.08964622285930639,0.0879763752154635,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
+2025-05-12 01:38:05,mel,1,96,0.001,0.2,0.23427753611869617,N/A,u_net_mel/unet_small_mel.pth,u_net_mel/unet_small_mel_loss_curve.png
+2025-05-12 01:43:03,mel,1,112,0.001,0.2,0.2234505250961823,N/A,u_net_mel/unet_small_mel.pth,u_net_mel/unet_small_mel_loss_curve.png
+2025-05-12 01:51:25,mel,1,112,0.001,0.2,0.23104654816833473,N/A,u_net_mel/unet_small_mel.pth,u_net_mel/unet_small_mel_loss_curve.png
+2025-05-12 18:19:47,mel,100,64,0.001,0.2,0.23475491894862136,N/A,u_net_mel/unet_medium_mel.pth,u_net_mel/unet_medium_mel_loss_curve.png
