@@ -1,6 +1,6 @@
 # Stem Separation - Vocal & Accompaniment
 
-This project focuses on separating audio tracks into **vocal** and **accompaniment** stems using deep learning models (U-Nets). It includes scripts for data preparation, training (using Mel or STFT spectrograms), and prediction.
+This project focuses on separating audio tracks into **vocal** and **accompaniment** stems using deep learning models (U-Nets). It includes scripts for data preparation, training (using STFT spectrograms), and prediction.
 
 > 🧑‍🎓 This is the **final project** for the **Artificial Intelligence with Deep Learning** postgraduate course at **Universitat Politècnica de Catalunya (UPC)**.
 
@@ -12,7 +12,7 @@ Train a model capable of separating a mixed music track into:
 
 ## 🛠️ Features
 
-- **Two Spectrogram Options:** Train models using either Mel spectrograms or STFT spectrograms.
+- **Spectrograms:** Train models using STFT spectrograms.
 - **U-Net Architecture:** Utilizes a small U-Net model for the separation task.
 - **Training Pipeline:** Includes data loading, training loop with validation, loss tracking, and model saving.
 - **Prediction Script:** Allows separating vocals and instruments from a given WAV file using a trained model.
@@ -51,22 +51,15 @@ Follow these steps in order:
 
 **2. Convert Audio to Spectrograms:**
 
-   This script converts the raw audio files into Mel or STFT spectrograms (`.npy` files) and saves them to the specified output directory (default: `sample_data/musdb/spectrograms/`).
+   This script converts the raw audio files into STFT spectrograms (`.npy` files) and saves them to the specified output directory (default: `sample_data/musdb/spectrograms/`).
 
-   *   **For Spectrograms:**
-       ```bash
-       python converter/convert.py 
-       ```
+   ```bash
+   python converter/convert.py 
+   ```
 
 **3. Train a Model:**
 
-   Train a U-Net model using the generated spectrograms. Choose the type (`mel` or `stft`) and specify the directory containing the corresponding `.npy` files.
-
-   *   **Train Mel Model:**
-       ```bash
-       python train.py --type mel --spectrogram_dir sample_data/spectrograms --epochs 50 --batch_size 8 --lr 0.001 --val_split 0.2
-       ```
-       *(Model saved to `u_net_mel/unet_small_mel.pth`, plot saved to `u_net_mel/unet_small_mel_loss_curve.png`)*
+   Train a U-Net model using the generated spectrograms. Choose the type (`stft`) and specify the directory containing the corresponding `.npy` files.
 
    *   **Train STFT Model:**
        ```bash
@@ -78,18 +71,6 @@ Follow these steps in order:
 
 **4. Predict (Separate Stems):**
 
-   Use a trained model to separate a mix WAV file into vocals and instruments. Currently, only the Mel model prediction pipeline is fully implemented in `predict_wav.py`.
-
-   ```bash
-   python predict_wav.py \
-       --model u_net_mel/unet_small_mel.pth \
-       --input_wav eval/mixture.wav \
-       --output_vocals output/vocals.wav \
-       --output_instruments output/instruments.wav \
-   ```
-   *Make sure the output directories exist or adjust the paths.*
-   *The `--is_mel` flag is required when using the Mel model.*
-
 ## 📦 Dataset (MUSDB18)
 
 While sample data scripts are provided, this project is designed with the [MUSDB18 dataset](https://sigsep.github.io/datasets/musdb.html) in mind for more robust training.
@@ -98,5 +79,5 @@ While sample data scripts are provided, this project is designed with the [MUSDB
 
 ## ⏳ Status
 
-- Core training and Mel prediction pipeline implemented.
-- STFT training is available, but the `predict_wav.py` script needs adaptation for STFT models.
+- Core training with STFT implemented.
+- STFT prediction pipeline needs implementation.

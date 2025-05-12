@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,7 +20,7 @@ class DoubleConv(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),  # 1st Conv layer
             nn.ReLU(inplace=True),  # 1st ReLU activation
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),  # 2nd Conv layer
-            nn.ReLU(inplace=True)  # 2nd ReLU activation
+            nn.ReLU(inplace=True),  # 2nd ReLU activation
         ]
         if dropout_p > 0.0:
             layers.append(nn.Dropout2d(dropout_p))
@@ -44,12 +46,14 @@ class UNetSmall(nn.Module):
     - Fewer feature maps to keep model small and fast
     """
 
+    MODEL_SAVE_PATH = str(Path(__file__).parent / "unet_small_stft.pth")
+
     def __init__(self, in_channels=1, out_channels=1, features=[32, 64, 128], dropout_p=0.3):
         """
         Initialize the U-Net.
 
         Args:
-            in_channels (int): Number of input channels (e.g., 1 for mel-spectrograms)
+            in_channels (int): Number of input channels (e.g., 1 for stft-spectrograms)
             out_channels (int): Number of output channels (e.g., 1 if predicting a mask or spectrogram)
             features (list): Number of feature channels at each downsampling step
             dropout_p (float): Dropout probability to use in DoubleConv blocks.
@@ -74,9 +78,7 @@ class UNetSmall(nn.Module):
             self.ups.append(
                 nn.ConvTranspose2d(feature * 2, feature, kernel_size=2, stride=2)
             )  # Upsampling (transposed convolution)
-            self.ups.append(
-                DoubleConv(feature * 2, feature, dropout_p=dropout_p)
-            )  # Double conv after skip connection
+            self.ups.append(DoubleConv(feature * 2, feature, dropout_p=dropout_p))  # Double conv after skip connection
 
         # --- Final output layer ---
         self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)  # 1x1 convolution to output
