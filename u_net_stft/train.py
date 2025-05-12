@@ -60,6 +60,10 @@ def train():
             # Backward pass
             optimizer.zero_grad()  # Clear previous gradients
             loss.backward()        # Backpropagate gradients
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    print(f"{name} grad norm: {param.grad.norm():.4f}")
+                break  # just one print to confirm
             optimizer.step()       # Update model parameters
 
             # Accumulate batch loss
