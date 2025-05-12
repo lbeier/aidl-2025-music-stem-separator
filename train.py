@@ -4,7 +4,7 @@ import warnings
 warnings.filterwarnings(
     "ignore",
     category=UserWarning,
-    message=".*GradScaler is enabled, but CUDA is not available.*"
+    message=".*GradScaler is enabled, but CUDA is not available.*",
 )
 
 import argparse
@@ -15,17 +15,16 @@ from torch.utils.data import DataLoader, random_split
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import csv  # Import csv module
-from datetime import datetime # Import datetime for timestamps
-import os # Import os for checking file existence
+from datetime import datetime  # Import datetime for timestamps
+import os  # Import os for checking file existence
 
 # Import your U-Net models and Dataset loaders
-from u_net_mel.model import UNetSmall as MelUNet
-from u_net_mel.dataset import MelSpectrogramDataset
 from u_net_stft.model import UNetSmall as StftUNet
 from u_net_stft.dataset import StftSpectrogramDataset
 
 # --- Define CSV file path ---
 RESULTS_CSV_PATH = "training_results.csv"
+
 
 def get_device():
     """
@@ -41,9 +40,19 @@ def get_device():
     else:
         return torch.device("cpu")
 
-def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epochs=50, batch_size=8, lr=1e-3, val_split=0.2):
+
+def train(
+    model_class,
+    dataset_class,
+    model_save_path,
+    spectrogram_dir,
+    num_epochs=50,
+    batch_size=8,
+    lr=1e-3,
+    val_split=0.2,
+):
     """
-    Train a U-Net model on MEL or STFT spectrogram dataset.
+    Train a U-Net model on STFT spectrogram dataset.
 
     Args:
         model_class: U-Net model class to instantiate.
@@ -77,14 +86,14 @@ def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epoc
         batch_size=batch_size,
         shuffle=True,
         num_workers=6,  # You can increase if you have good CPU
-        pin_memory=True
+        pin_memory=True,
     )
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=batch_size,
-        shuffle=False, # No need to shuffle validation data
+        shuffle=False,  # No need to shuffle validation data
         num_workers=6,
-        pin_memory=True
+        pin_memory=True,
     )
 
     # Instantiate model and move it to the device
@@ -97,7 +106,7 @@ def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epoc
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
 
     # Setup automatic mixed precision:
-    scaler = torch.amp.GradScaler(enabled=(device.type in ['cuda', 'mps']))
+    scaler = torch.amp.GradScaler(enabled=(device.type in ["cuda", "mps"]))
     autocast = torch.amp.autocast
 
     # Track losses
@@ -107,16 +116,20 @@ def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epoc
     # --- Start Training ---
     for epoch in tqdm(range(num_epochs), desc="Training Epochs"):
         # --- Training Phase ---
-        model.train() # Set model to training mode
+        model.train()  # Set model to training mode
         running_loss = 0.0
         # Loop through all training batches with tqdm
-        for mix, vocals in tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{num_epochs} - Train", leave=False):
+        for mix, vocals in tqdm(
+            train_dataloader,
+            desc=f"Epoch {epoch + 1}/{num_epochs} - Train",
+            leave=False,
+        ):
             mix, vocals = mix.to(device), vocals.to(device)
 
             optimizer.zero_grad()
 
             # Mixed precision forward and loss computation
-            with autocast(device_type=device.type, enabled=(device.type in ['cuda', 'mps'])):
+            with autocast(device_type=device.type, enabled=(device.type in ["cuda", "mps"])):
                 outputs = model(mix)
                 loss = criterion(outputs, vocals)
 
@@ -137,15 +150,19 @@ def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epoc
         train_losses.append(avg_train_loss)
 
         # --- Validation Phase ---
-        model.eval() # Set model to evaluation mode
+        model.eval()  # Set model to evaluation mode
         running_val_loss = 0.0
-        with torch.no_grad(): # Disable gradient calculation
+        with torch.no_grad():  # Disable gradient calculation
             # Loop through all validation batches with tqdm
-            for mix, vocals in tqdm(val_dataloader, desc=f"Epoch {epoch+1}/{num_epochs} - Val", leave=False):
+            for mix, vocals in tqdm(
+                val_dataloader,
+                desc=f"Epoch {epoch + 1}/{num_epochs} - Val",
+                leave=False,
+            ):
                 mix, vocals = mix.to(device), vocals.to(device)
 
                 # Use autocast only if enabled, but don't compute gradients
-                with autocast(device_type=device.type, enabled=(device.type in ['cuda', 'mps'])):
+                with autocast(device_type=device.type, enabled=(device.type in ["cuda", "mps"])):
                     outputs = model(mix)
                     loss = criterion(outputs, vocals)
 
@@ -155,21 +172,21 @@ def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epoc
         avg_val_loss = running_val_loss / len(val_dataloader)
         val_losses.append(avg_val_loss)
 
-        print(f"Epoch [{epoch+1}/{num_epochs}] - Train Loss: {avg_train_loss:.6f}, Val Loss: {avg_val_loss:.6f}")
+        print(f"Epoch [{epoch + 1}/{num_epochs}] - Train Loss: {avg_train_loss:.6f}, Val Loss: {avg_val_loss:.6f}")
 
     # --- End Training ---
 
     # Save the trained model weights
-    torch.save(model.state_dict(), model_save_path)
+    torch.save(model.state_dict(), model.MODEL_SAVE_PATH)
     print(f"Model saved at {model_save_path}")
 
     # --- Plotting ---
     plt.figure(figsize=(10, 5))
-    plt.plot(range(1, num_epochs + 1), train_losses, label='Training Loss')
-    plt.plot(range(1, num_epochs + 1), val_losses, label='Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss (MSE)')
-    plt.title('Training and Validation Loss Over Epochs')
+    plt.plot(range(1, num_epochs + 1), train_losses, label="Training Loss")
+    plt.plot(range(1, num_epochs + 1), val_losses, label="Validation Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss (MSE)")
+    plt.title("Training and Validation Loss Over Epochs")
     plt.legend()
     plt.grid(True)
     plot_save_path = model_save_path.replace(".pth", "_loss_curve.png")
@@ -178,12 +195,12 @@ def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epoc
     # Optionally display the plot
     # plt.show()
 
-    # --- Save results to CSV --- 
+    # --- Save results to CSV ---
     # ... (Keep the CSV saving logic here as implemented before) ...
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    model_type = 'mel' if 'mel' in model_save_path else 'stft' if 'stft' in model_save_path else 'unknown'
-    final_train_loss = train_losses[-1] if train_losses else float('nan')
-    final_val_loss = val_losses[-1] if val_losses else float('nan')
+    model_type = "stft"
+    final_train_loss = train_losses[-1] if train_losses else float("nan")
+    final_val_loss = val_losses[-1] if val_losses else float("nan")
 
     results_data = [
         timestamp,
@@ -195,53 +212,63 @@ def train(model_class, dataset_class, model_save_path, spectrogram_dir, num_epoc
         final_train_loss,
         final_val_loss,
         model_save_path,
-        plot_save_path
+        plot_save_path,
     ]
 
     header = [
-        'timestamp', 'model_type', 'num_epochs', 'batch_size', 'learning_rate',
-        'val_split', 'final_train_loss', 'final_val_loss', 'model_save_path', 'plot_save_path'
+        "timestamp",
+        "model_type",
+        "num_epochs",
+        "batch_size",
+        "learning_rate",
+        "val_split",
+        "final_train_loss",
+        "final_val_loss",
+        "model_save_path",
+        "plot_save_path",
     ]
 
     file_exists = os.path.exists(RESULTS_CSV_PATH)
 
     try:
-        with open(RESULTS_CSV_PATH, 'a', newline='') as csvfile:
+        with open(RESULTS_CSV_PATH, "a", newline="") as csvfile:
             writer = csv.writer(csvfile)
             if not file_exists:
-                writer.writerow(header) # Write header only if file is new
+                writer.writerow(header)  # Write header only if file is new
             writer.writerow(results_data)
         print(f"Results appended to {RESULTS_CSV_PATH}")
     except IOError as e:
         print(f"Error writing to CSV {RESULTS_CSV_PATH}: {e}")
+
 
 def main():
     """
     Main CLI entry point.
     Parses command line arguments and starts training.
     """
-    parser = argparse.ArgumentParser(description="Train U-Net on MEL or STFT spectrograms.")
+    parser = argparse.ArgumentParser(description="Train U-Net on STFT spectrograms.")
 
-    parser.add_argument('--type', type=str, required=True, choices=['mel', 'stft'],
-                        help="Choose which spectrogram type to train on (mel or stft).")
-    parser.add_argument('--spectrogram_dir', type=str, default="sample_data/spectrograms",
-                        help="Directory where spectrogram .npy files are stored.")
-    parser.add_argument('--epochs', type=int, default=50, help="Number of training epochs.")
-    parser.add_argument('--batch_size', type=int, default=8, help="Batch size during training.")
-    parser.add_argument('--lr', type=float, default=1e-3, help="Learning rate for optimizer.")
-    parser.add_argument('--val_split', type=float, default=0.2, help="Fraction of data for validation set (default: 0.2).")
+    parser.add_argument(
+        "--spectrogram_dir",
+        type=str,
+        default="sample_data/spectrograms",
+        help="Directory where spectrogram .npy files are stored.",
+    )
+    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs.")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size during training.")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate for optimizer.")
+    parser.add_argument(
+        "--val_split",
+        type=float,
+        default=0.2,
+        help="Fraction of data for validation set (default: 0.2).",
+    )
 
     args = parser.parse_args()
 
-    # Select correct model and dataset
-    if args.type == 'mel':
-        model_class = MelUNet
-        dataset_class = MelSpectrogramDataset
-        model_save_path = "u_net_mel/unet_small_mel.pth"
-    else:
-        model_class = StftUNet
-        dataset_class = StftSpectrogramDataset
-        model_save_path = "u_net_stft/unet_small_stft.pth"
+    model_class = StftUNet
+    dataset_class = StftSpectrogramDataset
+    model_save_path = StftUNet.MODEL_SAVE_PATH
 
     # Start training
     train(
@@ -252,8 +279,9 @@ def main():
         num_epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
-        val_split=args.val_split
+        val_split=args.val_split,
     )
+
 
 if __name__ == "__main__":
     main()

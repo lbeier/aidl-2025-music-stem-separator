@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import Dataset
 from pathlib import Path
 
+
 class StftSpectrogramDataset(Dataset):
     """
     PyTorch Dataset for loading pairs of (mix, vocals) chunked STFT spectrograms.
@@ -26,7 +27,6 @@ class StftSpectrogramDataset(Dataset):
             raise FileNotFoundError(f"No *mix_stft_chunk_*.npy files found in {spectrogram_dir}")
 
         print(f"Found {len(self.chunk_files)} STFT spectrogram chunks.")
-
 
     def __len__(self):
         """
@@ -62,7 +62,7 @@ class StftSpectrogramDataset(Dataset):
         if not vocals_chunk_path.exists():
             print(f"Warning: Missing vocal chunk: {vocals_chunk_path}. Returning zeros.")
             mix_spec = np.load(mix_chunk_path)
-            vocals_spec = np.zeros_like(mix_spec) # Create zero array with same shape
+            vocals_spec = np.zeros_like(mix_spec)  # Create zero array with same shape
         else:
             mix_spec = np.load(mix_chunk_path)
             vocals_spec = np.load(vocals_chunk_path)
