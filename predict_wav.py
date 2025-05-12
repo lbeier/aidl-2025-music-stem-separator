@@ -4,6 +4,7 @@ import numpy as np
 import librosa
 import soundfile as sf
 from pathlib import Path
+import mir_eval.separation as mir_sep
 
 # Import both models
 from u_net_mel.model import UNetSmall as MelUNet
@@ -15,6 +16,7 @@ N_FFT = 2048
 HOP_LENGTH = 512
 TARGET_SR = 44100
 
+
 def get_device():
     """Detect the best available device."""
     if torch.cuda.is_available():
@@ -23,6 +25,7 @@ def get_device():
         return torch.device("mps")
     else:
         return torch.device("cpu")
+
 
 def load_audio(filepath, sr=TARGET_SR):
     """Load a WAV file (ensure mono)."""
@@ -33,11 +36,19 @@ def load_audio(filepath, sr=TARGET_SR):
         y = librosa.resample(y, orig_sr=loaded_sr, target_sr=sr)
     return y
 
+
 def save_audio(y, path, sr=TARGET_SR):
     """Save waveform to a WAV file."""
     sf.write(path, y, sr)
 
-def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav, model_type='mel'):
+
+def calculate_sdr(reference, estimated):
+    """Calculate the Signal-to-Distortion Ratio (SDR) between reference and estimated signals."""
+    sdr, _, _, _ = mir_sep.bss_eval_sources(reference, estimated)
+    return sdr[0]  # Return the first (and only) SDR value
+
+
+def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav, model_type='stft', reference_vocals=None, reference_instruments=None):
     """Predict vocals and instruments from a WAV file using the trained model."""
     device = get_device()
     print(f"Using device: {device}")
@@ -68,11 +79,12 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
 
     # --- Calculate Input Spectrogram and Normalize (Consistent with converter_wav.py) ---
     min_db, max_db = None, None
-    phase = None # Initialize phase
+    phase = None  # Initialize phase
 
     if model_type == 'mel':
         print("Calculating MEL spectrogram...")
-        mel_spec = librosa.feature.melspectrogram(y=y, sr=TARGET_SR, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP_LENGTH)
+        mel_spec = librosa.feature.melspectrogram(
+            y=y, sr=TARGET_SR, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP_LENGTH)
         mel_db = librosa.power_to_db(mel_spec, ref=np.max)
         min_db = mel_db.min()
         max_db = mel_db.max()
@@ -82,7 +94,7 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         else:
             spec_norm = np.zeros_like(mel_db)
 
-    else: # stft
+    else:  # stft
         print("Calculating STFT spectrogram...")
         stft_result = librosa.stft(y=y, n_fft=N_FFT, hop_length=HOP_LENGTH)
         magnitude, phase = librosa.magphase(stft_result)
@@ -96,7 +108,8 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
             spec_norm = np.zeros_like(stft_db)
 
     # Prepare input for model
-    spec_tensor = torch.tensor(spec_norm, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
+    spec_tensor = torch.tensor(spec_norm, dtype=torch.float32).unsqueeze(
+        0).unsqueeze(0).to(device)
 
     # Predict the vocals mask/spectrogram
     print("Predicting with model...")
@@ -105,13 +118,15 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
 
     # Ensure prediction is clipped to valid range [0, 1]
     pred_vocals_norm = np.clip(pred_vocals_norm, 0, 1)
-    print(f"  Predicted vocals norm range: [{pred_vocals_norm.min():.2f}, {pred_vocals_norm.max():.2f}]")
+    print(
+        f"  Predicted vocals norm range: [{pred_vocals_norm.min():.2f}, {pred_vocals_norm.max():.2f}]")
 
     # Estimate instruments mask/spectrogram (as residual)
     pred_instruments_norm = spec_norm - pred_vocals_norm
     # Clip instrument estimate to ensure valid range
     pred_instruments_norm = np.clip(pred_instruments_norm, 0, 1)
-    print(f"  Estimated instruments norm range: [{pred_instruments_norm.min():.2f}, {pred_instruments_norm.max():.2f}]")
+    print(
+        f"  Estimated instruments norm range: [{pred_instruments_norm.min():.2f}, {pred_instruments_norm.max():.2f}]")
 
     # --- Convert back to waveform using consistent de-normalization ---
     print("Converting predictions back to audio...")
@@ -119,7 +134,7 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
     instruments_audio = None
     denormalization_range = max_db - min_db
 
-    if denormalization_range <= 0: # Handle case of silent input
+    if denormalization_range <= 0:  # Handle case of silent input
         print("  Warning: Input signal might be silent (dB range is zero or negative). Outputting silence.")
         vocals_audio = np.zeros_like(y)
         instruments_audio = np.zeros_like(y)
@@ -137,7 +152,7 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         instruments_audio = librosa.feature.inverse.mel_to_audio(
             pred_instruments_power, sr=TARGET_SR, n_fft=N_FFT, hop_length=HOP_LENGTH
         )
-    else: # stft
+    else:  # stft
         if phase is None:
             print("Error: Phase information is missing for STFT reconstruction.")
             return
@@ -152,14 +167,17 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         instruments_stft_rec = pred_instruments_amp * np.exp(1j * phase)
         # Inverse STFT
         vocals_audio = librosa.istft(vocals_stft_rec, hop_length=HOP_LENGTH)
-        instruments_audio = librosa.istft(instruments_stft_rec, hop_length=HOP_LENGTH)
+        instruments_audio = librosa.istft(
+            instruments_stft_rec, hop_length=HOP_LENGTH)
 
     # --- Auto-suffix output filenames ---
     out_vocals_path = Path(output_vocals_wav)
-    final_vocals_path = out_vocals_path.with_stem(f"{out_vocals_path.stem}_{model_type}")
+    final_vocals_path = out_vocals_path.with_stem(
+        f"{out_vocals_path.stem}_{model_type}")
 
     out_instruments_path = Path(output_instruments_wav)
-    final_instruments_path = out_instruments_path.with_stem(f"{out_instruments_path.stem}_{model_type}")
+    final_instruments_path = out_instruments_path.with_stem(
+        f"{out_instruments_path.stem}_{model_type}")
 
     # Save outputs with new names
     if vocals_audio is not None and instruments_audio is not None:
@@ -168,34 +186,61 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         save_audio(instruments_audio, str(final_instruments_path))
         print(f"Saved vocals: {final_vocals_path}")
         print(f"Saved instruments: {final_instruments_path}")
-    else:
-        print("Skipping saving due to errors during audio reconstruction.")
+
+        # Calculate SDR if reference files are provided
+        if reference_vocals is not None and reference_instruments is not None:
+            print("\nCalculating Signal-to-Distortion Ratio (SDR)...")
+            # Ensure all signals have the same length
+            min_len = min(len(reference_vocals), len(vocals_audio),
+                          len(reference_instruments), len(instruments_audio))
+
+            sdr_vocals = calculate_sdr(
+                reference_vocals[:min_len], vocals_audio[:min_len])
+            sdr_instruments = calculate_sdr(
+                reference_instruments[:min_len], instruments_audio[:min_len])
+
+            print(f"SDR for vocals: {sdr_vocals:.2f} dB")
+            print(f"SDR for instruments: {sdr_instruments:.2f} dB")
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Separate vocals and instruments from a mix WAV file using a trained U-Net. Uses min-max dB normalization consistent with converter_wav.py. Automatically appends _mel or _stft to output filenames.") # Updated description
-
-    parser.add_argument('--model', type=str, required=True, help="Path to the trained model .pth file.")
-    parser.add_argument('--input_wav', type=str, required=True, help="Path to the input mix WAV file.")
-    parser.add_argument('--output_vocals', type=str, required=True, help="Base path to save the output vocals WAV file (e.g., output/song_vocals.wav). _mel or _stft will be added automatically.")
-    parser.add_argument('--output_instruments', type=str, required=True, help="Base path to save the output instruments WAV file (e.g., output/song_instruments.wav). _mel or _stft will be added automatically.")
-    parser.add_argument('--type', type=str, default='mel', choices=['mel', 'stft'],
-                        help="Type of model/spectrogram used for training ('mel' or 'stft'). Default: mel.") # Clarified help
+    parser = argparse.ArgumentParser(
+        description='Predict vocals and instruments from a WAV file.')
+    parser.add_argument('--model', type=str, required=True,
+                        help='Path to the trained model file')
+    parser.add_argument('--input_wav', type=str, required=True,
+                        help='Path to the input WAV file')
+    parser.add_argument('--output_vocals', type=str, required=True,
+                        help='Path to save the predicted vocals WAV file')
+    parser.add_argument('--output_instruments', type=str, required=True,
+                        help='Path to save the predicted instruments WAV file')
+    parser.add_argument('--type', type=str, default='stft',
+                        choices=['mel', 'stft'], help='Model type (mel or stft)')
+    parser.add_argument('--ref_vocals', type=str,
+                        help='Path to reference vocals file (optional)')
+    parser.add_argument('--ref_instruments', type=str,
+                        help='Path to reference instruments file (optional)')
 
     args = parser.parse_args()
 
-    # Check if the correct model path is provided for the type (optional check)
-    if args.type == 'mel' and 'stft' in args.model.lower():
-        print("Warning: Model type is 'mel' but model path might contain 'stft'. Ensure correct model is loaded.")
-    elif args.type == 'stft' and 'mel' in args.model.lower():
-         print("Warning: Model type is 'stft' but model path might contain 'mel'. Ensure correct model is loaded.")
+    # Load reference files if provided
+    reference_vocals = None
+    reference_instruments = None
+    if args.ref_vocals and args.ref_instruments:
+        print("Loading reference files...")
+        reference_vocals = load_audio(args.ref_vocals)
+        reference_instruments = load_audio(args.ref_instruments)
 
     predict_wav(
         model_path=args.model,
         input_wav=args.input_wav,
         output_vocals_wav=args.output_vocals,
         output_instruments_wav=args.output_instruments,
-        model_type=args.type
+        model_type=args.type,
+        reference_vocals=reference_vocals,
+        reference_instruments=reference_instruments
     )
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     main()

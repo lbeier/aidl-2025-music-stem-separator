@@ -55,3 +55,4 @@ tqdm==4.67.1
 typing_extensions==4.13.2
 urllib3==2.4.0
 wheel==0.45.1
+mir_eval==0.6
