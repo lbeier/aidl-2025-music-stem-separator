@@ -3,3 +3,4 @@ timestamp,model_type,num_epochs,batch_size,learning_rate,val_split,final_train_l
 2025-05-02 17:43:52,stft,10,8,0.001,0.2,0.01859151243497681,0.018151506528730307,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
 2025-05-03 01:35:48,stft,4,4,0.0001,0.4,0.021656278000728734,0.018799896364108705,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
 2025-05-03 08:55:09,stft,20,8,0.0001,0.4,0.08964622285930639,0.0879763752154635,u_net_stft/unet_small_stft.pth,u_net_stft/unet_small_stft_loss_curve.png
+20250512_003502,UNetSmall,100,16,0.0001,0.2,0.141465291332058,0.14178122607357216,models/musdb18hq/final_model_20250512_003502.pth,models/musdb18hq/training_curves_20250512_003502.png

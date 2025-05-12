@@ -3,60 +3,131 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 from pathlib import Path
-import re # Import regex for parsing filenames
+import random
 
-class MelSpectrogramDataset(Dataset):
-    def __init__(self, spectrogram_dir):
+
+class ImprovedMelDataset(Dataset):
+    def __init__(self, data_dir, chunk_size=128, overlap=0.5, augment=True):
         """
         Args:
-            spectrogram_dir (string): Directory with all chunked .npy spectrograms.
+            data_dir: Directory containing processed spectrograms
+            chunk_size: Number of time frames per chunk
+            overlap: Overlap between chunks (0-1)
+            augment: Whether to apply data augmentation
         """
-        self.spectrogram_dir = Path(spectrogram_dir)
-        self.chunk_files = [] # List to store paths to mix chunks
+        self.data_dir = Path(data_dir)
+        self.chunk_size = chunk_size
+        self.overlap = overlap
+        self.augment = augment
 
-        # Find all mix MEL chunk files and build the list
-        # This implicitly defines the dataset size and allows mapping index to file
-        for filepath in self.spectrogram_dir.glob('*_mix_mel_chunk_*.npy'):
-            self.chunk_files.append(filepath)
+        # Find all mix files
+        self.mix_files = list(self.data_dir.glob('*_mix.npy'))
 
-        if not self.chunk_files:
-            raise FileNotFoundError(f"No *mix_mel_chunk_*.npy files found in {spectrogram_dir}")
+        # Pre-compute chunk indices
+        self.chunks = []
+        for mix_file in self.mix_files:
+            mix_data = np.load(mix_file)
+            n_frames = mix_data.shape[1]
 
-        print(f"Found {len(self.chunk_files)} MEL spectrogram chunks.")
+            # Calculate chunk indices with overlap
+            step = int(chunk_size * (1 - overlap))
+            for start in range(0, n_frames - chunk_size, step):
+                self.chunks.append((mix_file, start))
+
+        print(
+            f"Created dataset with {len(self.chunks)} chunks from {len(self.mix_files)} songs")
 
     def __len__(self):
-        return len(self.chunk_files)
+        return len(self.chunks)
+
+    def augment_chunk(self, mix_chunk, vocals_chunk):
+        """Apply data augmentation to chunks"""
+        if random.random() < 0.5:
+            # Time stretching
+            rate = random.uniform(0.9, 1.1)
+            mix_chunk = self._time_stretch(mix_chunk, rate)
+            vocals_chunk = self._time_stretch(vocals_chunk, rate)
+
+        if random.random() < 0.5:
+            # Frequency masking
+            mix_chunk = self._freq_mask(mix_chunk)
+            vocals_chunk = self._freq_mask(vocals_chunk)
+
+        if random.random() < 0.5:
+            # Time masking
+            mix_chunk = self._time_mask(mix_chunk)
+            vocals_chunk = self._time_mask(vocals_chunk)
+
+        return mix_chunk, vocals_chunk
+
+    def _time_stretch(self, chunk, rate):
+        """Apply time stretching to a chunk"""
+        n_frames = chunk.shape[1]
+        new_n_frames = int(n_frames * rate)
+        stretched = np.zeros((chunk.shape[0], new_n_frames))
+        indices = np.linspace(0, n_frames - 1, new_n_frames)
+        for i in range(chunk.shape[0]):
+            stretched[i] = np.interp(indices, np.arange(n_frames), chunk[i])
+        return stretched
+
+    def _freq_mask(self, chunk, max_width=8):
+        """Apply frequency masking"""
+        width = random.randint(1, max_width)
+        start = random.randint(0, chunk.shape[0] - width)
+        chunk[start:start+width] = 0
+        return chunk
+
+    def _time_mask(self, chunk, max_width=8):
+        """Apply time masking"""
+        width = random.randint(1, max_width)
+        start = random.randint(0, chunk.shape[1] - width)
+        chunk[:, start:start+width] = 0
+        return chunk
 
     def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
+        mix_file, start = self.chunks[idx]
+        vocals_file = mix_file.parent / \
+            mix_file.name.replace('_mix.npy', '_vocals.npy')
 
-        mix_chunk_path = self.chunk_files[idx]
+        # Load chunks
+        mix_chunk = np.load(mix_file)[:, start:start + self.chunk_size]
+        vocals_chunk = np.load(vocals_file)[:, start:start + self.chunk_size]
 
-        # Construct the corresponding vocals chunk path from the mix chunk path
-        # Assumes filenames like: TRACK_mix_mel_chunk_0000.npy -> TRACK_vocals_mel_chunk_0000.npy
-        vocals_chunk_path_str = mix_chunk_path.name.replace("_mix_mel_", "_vocals_mel_")
-        vocals_chunk_path = self.spectrogram_dir / vocals_chunk_path_str
+        # Apply augmentation if enabled
+        if self.augment:
+            mix_chunk, vocals_chunk = self.augment_chunk(
+                mix_chunk, vocals_chunk)
 
-        if not vocals_chunk_path.exists():
-             # Handle cases where a vocal chunk might be missing if generation failed partially
-             # Option 1: Skip this index (might cause issues if not handled carefully)
-             # Option 2: Return None or raise error (better handled by dataloader collate/worker)
-             # Option 3: Load a zero tensor (simpler for now)
-             print(f"Warning: Missing vocal chunk: {vocals_chunk_path}. Returning zeros.")
-             # Determine shape from mix chunk
-             mix_spec = np.load(mix_chunk_path)
-             vocals_spec = np.zeros_like(mix_spec)
+        # Ensure output is exactly chunk_size in time dimension
+        def fix_length(chunk, chunk_size):
+            if chunk.shape[1] > chunk_size:
+                return chunk[:, :chunk_size]
+            elif chunk.shape[1] < chunk_size:
+                pad_width = chunk_size - chunk.shape[1]
+                return np.pad(chunk, ((0, 0), (0, pad_width)), mode='constant')
+            else:
+                return chunk
+
+        mix_chunk = fix_length(mix_chunk, self.chunk_size)
+        vocals_chunk = fix_length(vocals_chunk, self.chunk_size)
+
+        # Normalize to [0, 1]
+        mix_min, mix_max = mix_chunk.min(), mix_chunk.max()
+        vocals_min, vocals_max = vocals_chunk.min(), vocals_chunk.max()
+
+        if mix_max > mix_min:
+            mix_norm = (mix_chunk - mix_min) / (mix_max - mix_min)
         else:
-             mix_spec = np.load(mix_chunk_path)
-             vocals_spec = np.load(vocals_chunk_path)
+            mix_norm = np.zeros_like(mix_chunk)
 
-        # Add channel dimension (C, H, W) - PyTorch expects channels first
-        mix_spec = np.expand_dims(mix_spec, axis=0)
-        vocals_spec = np.expand_dims(vocals_spec, axis=0)
+        if vocals_max > vocals_min:
+            vocals_norm = (vocals_chunk - vocals_min) / \
+                (vocals_max - vocals_min)
+        else:
+            vocals_norm = np.zeros_like(vocals_chunk)
 
-        # Convert to torch tensors
-        mix_tensor = torch.from_numpy(mix_spec.astype(np.float32))
-        vocals_tensor = torch.from_numpy(vocals_spec.astype(np.float32))
+        # Convert to tensors
+        mix_tensor = torch.from_numpy(mix_norm).float().unsqueeze(0)
+        vocals_tensor = torch.from_numpy(vocals_norm).float().unsqueeze(0)
 
         return mix_tensor, vocals_tensor
