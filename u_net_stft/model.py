@@ -81,7 +81,7 @@ class UNetSmall(nn.Module):
             self.ups.append(DoubleConv(feature * 2, feature, dropout_p=dropout_p))  # Double conv after skip connection
 
         # --- Final output layer ---
-        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)  # 1x1 convolution to output
+        self.final_conv = nn.Conv2d(features[0], 2, kernel_size=1)  # 1x1 convolution to output 2 channels
 
     def forward(self, x):
         """
@@ -91,7 +91,7 @@ class UNetSmall(nn.Module):
             x (torch.Tensor): Input tensor of shape (batch_size, in_channels, H, W)
 
         Returns:
-            torch.Tensor: Output tensor of shape (batch_size, out_channels, H, W)
+            torch.Tensor: Output tensor of shape (batch_size, 2, H, W)
         """
         skip = []  # Store outputs for skip connections
 
@@ -122,4 +122,4 @@ class UNetSmall(nn.Module):
             x = self.ups[idx + 1](x)
 
         # --- Final Convolution to map to output channels ---
-        return self.final_conv(x)
+        return torch.sigmoid(self.final_conv(x))
