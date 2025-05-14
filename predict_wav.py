@@ -36,6 +36,9 @@ def load_audio(filepath, sr=TARGET_SR):
 
 def save_audio(y, path, sr=TARGET_SR):
     """Save waveform to a WAV file."""
+    if y is None or len(y) == 0 or np.isnan(y).any() or np.isinf(y).any():
+        print(f"[ERROR] Invalid audio. Not saving to {path}.")
+        return
     sf.write(path, y, sr)
 
 
@@ -80,16 +83,11 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
     # Predict the vocals mask/spectrogram
     print("Predicting with model...")
     with torch.no_grad():
-        pred_vocals_norm = model(spec_tensor).squeeze().cpu().numpy()
+        pred_output = model(spec_tensor).squeeze().cpu().numpy()
+        pred_vocals_norm = np.clip(pred_output[0], 0, 1)
+        pred_instruments_norm = np.clip(pred_output[1], 0, 1)
 
-    # Ensure prediction is clipped to valid range [0, 1]
-    pred_vocals_norm = np.clip(pred_vocals_norm, 0, 1)
     print(f"  Predicted vocals norm range: [{pred_vocals_norm.min():.2f}, {pred_vocals_norm.max():.2f}]")
-
-    # Estimate instruments mask/spectrogram (as residual)
-    pred_instruments_norm = spec_norm - pred_vocals_norm
-    # Clip instrument estimate to ensure valid range
-    pred_instruments_norm = np.clip(pred_instruments_norm, 0, 1)
     print(f"  Estimated instruments norm range: [{pred_instruments_norm.min():.2f}, {pred_instruments_norm.max():.2f}]")
 
     # --- Convert back to waveform using consistent de-normalization ---

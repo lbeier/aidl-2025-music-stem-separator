@@ -87,7 +87,7 @@ def process_file(file: Path, spectrogram_dir: Path, waveform_dir: Path):
         # Function to save chunks
         def save_chunks(spectrogram, label):
             n_frames = spectrogram.shape[1]
-            for i in range(0, n_frames, chunk_size):
+            for i in range(0, n_frames - chunk_size + 1, chunk_size):
                 chunk = spectrogram[:, i : i + chunk_size]
                 chunk_filename = f"{file.stem}_{label}_chunk_{i // chunk_size:02d}.npy"
                 np.save(chunk_dir / chunk_filename, chunk)
