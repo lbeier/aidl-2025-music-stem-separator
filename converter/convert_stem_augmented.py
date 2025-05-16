@@ -14,8 +14,8 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from sample_downloader.download import MUSDB_SAMPLE_OUTPUT_PATH
 
 # --- Configurable constants ---
-SPECTROGRAM_OUTPUT_PATH = "{}/sample_data/spectrograms_augmented_chunks_5s"
-WAVEFORM_OUTPUT_PATH = "{}/sample_data/waveforms_augmented_chunks_5s"
+SPECTROGRAM_OUTPUT_PATH = "{}/sample_data/spectrograms_augmented_chunks_6s"
+WAVEFORM_OUTPUT_PATH = "{}/sample_data/waveforms_augmented_chunks_6s"
 
 # Reduced parameters for memory efficiency
 TARGET_SR = 22050  # Reduced sample rate (from 44100)
@@ -113,6 +113,10 @@ def create_synthetic_song(y: np.ndarray, sr: int) -> np.ndarray:
 
 def compute_normalized_mel(y: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
     """Compute normalized Mel spectrogram and dB Mel spectrogram."""
+    # Add small epsilon to avoid zero values
+    eps = 1e-6
+    y = y + eps * np.random.randn(*y.shape)
+    
     mel_spec = librosa.feature.melspectrogram(
         y=y, 
         sr=sr, 
@@ -121,15 +125,43 @@ def compute_normalized_mel(y: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarr
         hop_length=HOP_LENGTH
     )
     mel_db = librosa.power_to_db(mel_spec, ref=np.max)
-    mel_norm = (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min())
+    
+    # Safe normalization
+    min_db = mel_db.min()
+    max_db = mel_db.max()
+    if max_db > min_db:
+        mel_norm = (mel_db - min_db) / (max_db - min_db)
+    else:
+        # If all values are the same, return zeros
+        mel_norm = np.zeros_like(mel_db)
+    
+    # Replace any remaining invalid values
+    mel_norm = np.nan_to_num(mel_norm, nan=0.0, posinf=1.0, neginf=0.0)
+    
     return mel_norm, mel_db
 
 def compute_normalized_stft(y: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
     """Compute normalized STFT spectrogram and dB STFT spectrogram."""
+    # Add small epsilon to avoid zero values
+    eps = 1e-6
+    y = y + eps * np.random.randn(*y.shape)
+    
     stft = librosa.stft(y, n_fft=N_FFT, hop_length=HOP_LENGTH)
     magnitude, _ = librosa.magphase(stft)
     stft_db = librosa.amplitude_to_db(magnitude, ref=np.max)
-    stft_norm = (stft_db - stft_db.min()) / (stft_db.max() - stft_db.min())
+    
+    # Safe normalization
+    min_db = stft_db.min()
+    max_db = stft_db.max()
+    if max_db > min_db:
+        stft_norm = (stft_db - min_db) / (max_db - min_db)
+    else:
+        # If all values are the same, return zeros
+        stft_norm = np.zeros_like(stft_db)
+    
+    # Replace any remaining invalid values
+    stft_norm = np.nan_to_num(stft_norm, nan=0.0, posinf=1.0, neginf=0.0)
+    
     return stft_norm, stft_db
 
 def save_spectrogram_image(spec_db: np.ndarray, save_path: Path, sr: int):
@@ -191,7 +223,8 @@ def process_file(file: Path, spectrogram_dir: Path, waveform_dir: Path):
         # Calculate chunk size in samples
         chunk_size = int(CHUNK_DURATION_SECONDS * sr)
         
-        # Process mix in chunks
+        # Process original mix in chunks
+        print(f"Processing original version of {file.name}")
         for i in range(0, len(mix), chunk_size):
             chunk = mix[i:i + chunk_size]
             
@@ -201,8 +234,32 @@ def process_file(file: Path, spectrogram_dir: Path, waveform_dir: Path):
             
             chunk_idx = i // chunk_size
             process_chunk(chunk, sr, file.stem, chunk_idx, spectrogram_dir, waveform_dir)
-            
-        print(f"Finished {file.name}")
+        
+        # Create and process synthetic versions if it's a training file
+        if "train" in str(file):
+            print(f"Creating synthetic versions for {file.name}")
+            for i in range(N_SYNTHETIC_SONGS):
+                try:
+                    print(f"Creating synthetic version {i+1} for {file.name}")
+                    synthetic = create_synthetic_song(mix.copy(), sr)
+                    
+                    # Process synthetic version in chunks
+                    for j in range(0, len(synthetic), chunk_size):
+                        chunk = synthetic[j:j + chunk_size]
+                        
+                        # If the chunk is too small (last chunk), pad it
+                        if len(chunk) < chunk_size:
+                            chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
+                        
+                        chunk_idx = j // chunk_size
+                        synthetic_name = f"{file.stem}_synthetic_{i+1}"
+                        process_chunk(chunk, sr, synthetic_name, chunk_idx, spectrogram_dir, waveform_dir)
+                    
+                    print(f"Finished synthetic version {i+1} for {file.name}")
+                except Exception as e:
+                    print(f"Error creating synthetic version {i+1} for {file.name}: {e}")
+        
+        print(f"Finished processing {file.name}")
         
     except Exception as e:
         print(f"Error processing {file.name}: {e}")
