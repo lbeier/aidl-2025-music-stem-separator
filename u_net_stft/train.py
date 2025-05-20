@@ -141,8 +141,12 @@ def train(
             # Mixed precision forward and loss computation
             with autocast(device_type=device.type, enabled=(device.type in ["cuda", "mps"])):
                 outputs = model(mix)
-                loss_vocals = criterion(outputs[:, 0:1], vocals)
-                loss_instruments = criterion(outputs[:, 1:2], instruments)
+                vocal_mask = outputs[:, 0:1]
+                instr_mask = outputs[:, 1:2]
+                pred_vocals = vocal_mask * mix
+                pred_instr = instr_mask * mix
+                loss_vocals = criterion(pred_vocals, vocals)
+                loss_instruments = criterion(pred_instr, instruments)
                 loss = loss_vocals + loss_instruments
 
             # Backward pass with scaled loss
@@ -176,8 +180,12 @@ def train(
                 # Use autocast only if enabled, but don't compute gradients
                 with autocast(device_type=device.type, enabled=(device.type in ["cuda", "mps"])):
                     outputs = model(mix)
-                    loss_vocals = criterion(outputs[:, 0:1], vocals)
-                    loss_instruments = criterion(outputs[:, 1:2], instruments)
+                    vocal_mask = outputs[:, 0:1]
+                    instr_mask = outputs[:, 1:2]
+                    pred_vocals = vocal_mask * mix
+                    pred_instr = instr_mask * mix
+                    loss_vocals = criterion(pred_vocals, vocals)
+                    loss_instruments = criterion(pred_instr, instruments)
                     loss = loss_vocals + loss_instruments
 
                 running_val_loss += loss.item()
