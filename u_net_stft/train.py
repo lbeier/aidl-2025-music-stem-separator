@@ -7,7 +7,6 @@ warnings.filterwarnings(
     message=".*GradScaler is enabled, but CUDA is not available.*",
 )
 
-import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -18,9 +17,8 @@ import csv  # Import csv module
 from datetime import datetime  # Import datetime for timestamps
 import os  # Import os for checking file existence
 
-# Import your U-Net models and Dataset loaders
-from u_net_stft.model import UNetSmall as StftUNet
-from u_net_stft.dataset import StftSpectrogramDataset
+from model import UNetSmall as StftUNet
+from dataset import StftSpectrogramDataset
 
 # --- Define CSV file path ---
 RESULTS_CSV_PATH = "training_results.csv"
@@ -88,14 +86,14 @@ def train(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=6,  # You can increase if you have good CPU
+        num_workers=2,  # You can increase if you have good CPU
         pin_memory=True,
     )
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,  # No need to shuffle validation data
-        num_workers=6,
+        num_workers=2,
         pin_memory=True,
     )
 
@@ -141,8 +139,12 @@ def train(
             # Mixed precision forward and loss computation
             with autocast(device_type=device.type, enabled=(device.type in ["cuda", "mps"])):
                 outputs = model(mix)
-                loss_vocals = criterion(outputs[:, 0:1], vocals)
-                loss_instruments = criterion(outputs[:, 1:2], instruments)
+                vocal_mask = outputs[:, 0:1]
+                instr_mask = outputs[:, 1:2]
+                pred_vocals = vocal_mask * mix
+                pred_instr = instr_mask * mix
+                loss_vocals = criterion(pred_vocals, vocals)
+                loss_instruments = criterion(pred_instr, instruments)
                 loss = loss_vocals + loss_instruments
 
             # Backward pass with scaled loss
@@ -176,8 +178,12 @@ def train(
                 # Use autocast only if enabled, but don't compute gradients
                 with autocast(device_type=device.type, enabled=(device.type in ["cuda", "mps"])):
                     outputs = model(mix)
-                    loss_vocals = criterion(outputs[:, 0:1], vocals)
-                    loss_instruments = criterion(outputs[:, 1:2], instruments)
+                    vocal_mask = outputs[:, 0:1]
+                    instr_mask = outputs[:, 1:2]
+                    pred_vocals = vocal_mask * mix
+                    pred_instr = instr_mask * mix
+                    loss_vocals = criterion(pred_vocals, vocals)
+                    loss_instruments = criterion(pred_instr, instruments)
                     loss = loss_vocals + loss_instruments
 
                 running_val_loss += loss.item()
@@ -218,7 +224,7 @@ def train(
     plt.savefig(plot_save_path)
     print(f"Loss curve saved at {plot_save_path}")
     # Optionally display the plot
-    # plt.show()
+    plt.show()
 
     # --- Save results to CSV ---
     # ... (Keep the CSV saving logic here as implemented before) ...
@@ -269,52 +275,14 @@ def train(
     except IOError as e:
         print(f"Error writing to CSV {RESULTS_CSV_PATH}: {e}")
 
-
-def main():
-    """
-    Main CLI entry point.
-    Parses command line arguments and starts training.
-    """
-    parser = argparse.ArgumentParser(description="Train U-Net on STFT spectrograms.")
-
-    parser.add_argument(
-        "--spectrogram_dir",
-        type=str,
-        default="sample_data/spectrograms",
-        help="Directory where spectrogram .npy files are stored.",
-    )
-    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size during training.")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate for optimizer.")
-    parser.add_argument(
-        "--val_split",
-        type=float,
-        default=0.2,
-        help="Fraction of data for validation set (default: 0.2).",
-    )
-    parser.add_argument(
-        "--resume_from", type=str, default=None, help="Optional path to a checkpoint .pth file to resume training from."
-    )
-
-    args = parser.parse_args()
-
-    model_class = StftUNet
-    dataset_class = StftSpectrogramDataset
-    model_save_path = StftUNet.MODEL_SAVE_PATH
-
-    # Start training
-    train(
-        model_class=model_class,
-        dataset_class=dataset_class,
-        model_save_path=model_save_path,
-        spectrogram_dir=args.spectrogram_dir,
-        num_epochs=args.epochs,
-        batch_size=args.batch_size,
-        lr=args.lr,
-        val_split=args.val_split,
-        resume_from=args.resume_from,
-    )
-
-
-if __name__ == "__main__":
-    main()
+train(
+    model_class=StftUNet,
+    dataset_class=StftSpectrogramDataset,
+    model_save_path="unet_colab.pth",
+    spectrogram_dir="/content/spectrograms",  # Adjust path
+    num_epochs=10,
+    batch_size=4,
+    lr=1e-3,
+    val_split=0.2,
+    resume_from=None
+)

@@ -15,13 +15,7 @@ TARGET_SR = 44100
 
 
 def get_device():
-    """Detect the best available device."""
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        return torch.device("mps")
-    else:
-        return torch.device("cpu")
+    return torch.device("cpu")
 
 
 def load_audio(filepath, sr=TARGET_SR):

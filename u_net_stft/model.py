@@ -48,7 +48,7 @@ class UNetSmall(nn.Module):
 
     MODEL_SAVE_PATH = str(Path(__file__).parent / "unet_small_stft.pth")
 
-    def __init__(self, in_channels=1, out_channels=1, features=[32, 64, 128], dropout_p=0.3):
+    def __init__(self, in_channels=1, out_channels=1, features=[64, 128, 256, 512], dropout_p=0.3):
         """
         Initialize the U-Net.
 
