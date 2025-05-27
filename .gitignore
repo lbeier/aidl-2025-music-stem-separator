@@ -9,3 +9,5 @@ interpretability/
 eval/
 output/
 *.log
+*.h5
+sample_data/h5/
