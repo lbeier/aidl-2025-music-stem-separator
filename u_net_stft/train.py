@@ -1,4 +1,19 @@
+import argparse
+import csv  # Import csv module
+import logging
+import os  # Import os for checking file existence
 import warnings
+from datetime import datetime  # Import datetime for timestamps
+
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, random_split
+from tqdm import tqdm
+
+from u_net_stft.dataset import StftSpectrogramDataset
+from u_net_stft.model import UNetSmall as StftUNet
 
 # Suppress all UserWarnings containing GradScaler + CUDA
 warnings.filterwarnings(
@@ -7,20 +22,9 @@ warnings.filterwarnings(
     message=".*GradScaler is enabled, but CUDA is not available.*",
 )
 
-import argparse
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-import csv  # Import csv module
-from datetime import datetime  # Import datetime for timestamps
-import os  # Import os for checking file existence
 
-# Import your U-Net models and Dataset loaders
-from u_net_stft.model import UNetSmall as StftUNet
-from u_net_stft.dataset import StftSpectrogramDataset
+LOG_FILENAME = "epochs.log"
+logging.basicConfig(filename=LOG_FILENAME, level=logging.DEBUG)
 
 # --- Define CSV file path ---
 RESULTS_CSV_PATH = "training_results.csv"
@@ -69,7 +73,9 @@ def train(
     """
     # Select the best available device
     device = get_device()
-    print(f"Using device: {device}")
+    device_message = f"Using device: {device}"
+    print(device_message)
+    logging.debug(device_message)
 
     # Load full dataset
     full_dataset = dataset_class(spectrogram_dir)
@@ -80,8 +86,12 @@ def train(
     train_size = dataset_size - val_size
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
-    print(f"Training set size: {train_size}")
-    print(f"Validation set size: {val_size}")
+    set_size = f"Training set size: {train_size}"
+    validation_size = f"Validation set size: {val_size}"
+    print(set_size)
+    print(validation_size)
+    logging.debug(set_size)
+    logging.debug(validation_size)
 
     # Dataloaders for batching
     train_dataloader = DataLoader(
@@ -103,7 +113,9 @@ def train(
     model = model_class(in_channels=1, out_channels=1).to(device)
 
     if resume_from is not None:
-        print(f"Resuming from checkpoint: {resume_from}")
+        checkpoint_resume = f"Resuming from checkpoint: {resume_from}"
+        print(checkpoint_resume)
+        logging.debug(checkpoint_resume)
         model.load_state_dict(torch.load(resume_from, map_location=device))
 
     # Use Mean Absolute Error loss (L1 Loss)
@@ -194,24 +206,31 @@ def train(
         avg_val_loss = running_val_loss / len(val_dataloader)
         val_losses.append(avg_val_loss)
 
-        print(f"Epoch [{epoch + 1}/{num_epochs}] - Train Loss: {avg_train_loss:.6f}, Val Loss: {avg_val_loss:.6f}")
+        message = f"Epoch [{epoch + 1}/{num_epochs}] - Train Loss: {avg_train_loss:.6f}, Val Loss: {avg_val_loss:.6f}"
+
+        print(message)
+        logging.debug(message)
 
         # Save checkpoint for this epoch
         epoch_ckpt_path = model_save_path.replace(".pth", f"_epoch_{epoch + 1}.pth")
         torch.save(model.state_dict(), epoch_ckpt_path)
-        print(f"Checkpoint saved at {epoch_ckpt_path}")
+        checkopoint_saved = f"Checkpoint saved at {epoch_ckpt_path}"
+        print(checkopoint_saved)
+        logging.debug(checkopoint_saved)
 
         # Save best model checkpoint
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            best_ckpt_path = model_save_path.replace(".pth", f"_best.pth")
+            best_ckpt_path = model_save_path.replace(".pth", "_best.pth")
             torch.save(model.state_dict(), best_ckpt_path)
 
     # --- End Training ---
 
     # Save the trained model weights
     torch.save(model.state_dict(), model_save_path)
-    print(f"Model saved at {model_save_path}")
+    model_saved = f"Model saved at {model_save_path}"
+    print(model_saved)
+    logging.debug(model_saved)
 
     # --- Plotting ---
     plt.figure(figsize=(10, 5))
@@ -224,7 +243,9 @@ def train(
     plt.grid(True)
     plot_save_path = model_save_path.replace(".pth", "_loss_curve.png")
     plt.savefig(plot_save_path)
-    print(f"Loss curve saved at {plot_save_path}")
+    loss_curve_saved = f"Loss curve saved at {plot_save_path}"
+    print(loss_curve_saved)
+    logging.debug(loss_curve_saved)
     # Optionally display the plot
     # plt.show()
 
@@ -273,7 +294,9 @@ def train(
             if not file_exists:
                 writer.writerow(header)  # Write header only if file is new
             writer.writerow(results_data)
-        print(f"Results appended to {RESULTS_CSV_PATH}")
+        results_appended = f"Results appended to {RESULTS_CSV_PATH}"
+        print(results_appended)
+        logging.debug(results_appended)
     except IOError as e:
         print(f"Error writing to CSV {RESULTS_CSV_PATH}: {e}")
 
