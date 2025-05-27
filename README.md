@@ -108,6 +108,25 @@ While sample data scripts are provided, this project is designed with the [MUSDB
 - Download it manually if desired.
 - You will need to adapt the `converter/convert.py` script or your workflow to process the MUSDB18 structure and place the generated spectrograms in a location accessible by `train.py`.
 
+## 📦 Dataset .h5 (MUSDB18)
+
+Este proyecto soporta entrenamiento directamente desde archivos `.h5` con espectrogramas preprocesados (por ejemplo, MUSDB18).
+
+- Coloca los archivos `.h5` en la carpeta `sample_data/h5/`.
+- Ejemplo de ruta: `sample_data/h5/musdb18_train_spectrograms.h5`
+- **No subas estos archivos al repositorio.**
+
+Para usar el dataset `.h5` en el entrenamiento:
+
+```python
+from u_net_stft.h5_dataset import H5SpectrogramDataset
+from u_net_stft.augment import spec_augment
+
+dataset = H5SpectrogramDataset('sample_data/h5/musdb18_train_spectrograms.h5', transform=spec_augment)
+```
+
+Puedes aplicar augmentations como SpecAugment directamente sobre los espectrogramas durante el entrenamiento.
+
 ## ⏳ Status
 
 - Core training with STFT implemented.
