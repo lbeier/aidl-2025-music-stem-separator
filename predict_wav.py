@@ -4,6 +4,7 @@ import numpy as np
 import librosa
 import soundfile as sf
 from pathlib import Path
+import mir_eval.separation as mir_sep
 
 # Import STFT model only
 from u_net_stft.model import UNetSmall as StftUNet
@@ -42,7 +43,13 @@ def save_audio(y, path, sr=TARGET_SR):
     sf.write(path, y, sr)
 
 
-def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav):
+def calculate_sdr(reference, estimated):
+    """Calculate the Signal-to-Distortion Ratio (SDR) between reference and estimated signals."""
+    sdr, _, _, _ = mir_sep.bss_eval_sources(reference, estimated)
+    return sdr[0]  # Return the first (and only) SDR value
+
+
+def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav, reference_vocals=None, reference_instruments=None):
     """Predict vocals and instruments from a WAV file using the trained STFT model."""
     device = get_device()
     print(f"Using device: {device}")
@@ -78,7 +85,8 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         spec_norm = np.zeros_like(stft_db)
 
     # Prepare input for model
-    spec_tensor = torch.tensor(spec_norm, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
+    spec_tensor = torch.tensor(spec_norm, dtype=torch.float32).unsqueeze(
+        0).unsqueeze(0).to(device)
 
     # Predict the vocals mask/spectrogram
     print("Predicting with model...")
@@ -87,8 +95,10 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         pred_vocals_norm = np.clip(pred_output[0], 0, 1)
         pred_instruments_norm = np.clip(pred_output[1], 0, 1)
 
-    print(f"  Predicted vocals norm range: [{pred_vocals_norm.min():.2f}, {pred_vocals_norm.max():.2f}]")
-    print(f"  Estimated instruments norm range: [{pred_instruments_norm.min():.2f}, {pred_instruments_norm.max():.2f}]")
+    print(
+        f"  Predicted vocals norm range: [{pred_vocals_norm.min():.2f}, {pred_vocals_norm.max():.2f}]")
+    print(
+        f"  Estimated instruments norm range: [{pred_instruments_norm.min():.2f}, {pred_instruments_norm.max():.2f}]")
 
     # --- Convert back to waveform using consistent de-normalization ---
     print("Converting predictions back to audio...")
@@ -115,14 +125,17 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         instruments_stft_rec = pred_instruments_amp * np.exp(1j * phase)
         # Inverse STFT
         vocals_audio = librosa.istft(vocals_stft_rec, hop_length=HOP_LENGTH)
-        instruments_audio = librosa.istft(instruments_stft_rec, hop_length=HOP_LENGTH)
+        instruments_audio = librosa.istft(
+            instruments_stft_rec, hop_length=HOP_LENGTH)
 
     # --- Auto-suffix output filenames ---
     out_vocals_path = Path(output_vocals_wav)
-    final_vocals_path = out_vocals_path.with_stem(f"{out_vocals_path.stem}_stft")
+    final_vocals_path = out_vocals_path.with_stem(
+        f"{out_vocals_path.stem}_stft")
 
     out_instruments_path = Path(output_instruments_wav)
-    final_instruments_path = out_instruments_path.with_stem(f"{out_instruments_path.stem}_stft")
+    final_instruments_path = out_instruments_path.with_stem(
+        f"{out_instruments_path.stem}_stft")
 
     # Save outputs with new names
     if vocals_audio is not None and instruments_audio is not None:
@@ -131,6 +144,21 @@ def predict_wav(model_path, input_wav, output_vocals_wav, output_instruments_wav
         save_audio(instruments_audio, str(final_instruments_path))
         print(f"Saved vocals: {final_vocals_path}")
         print(f"Saved instruments: {final_instruments_path}")
+
+        # Calculate SDR if reference files are provided
+        if reference_vocals is not None and reference_instruments is not None:
+            print("\nCalculating Signal-to-Distortion Ratio (SDR)...")
+            # Ensure all signals have the same length
+            min_len = min(len(reference_vocals), len(vocals_audio),
+                          len(reference_instruments), len(instruments_audio))
+
+            sdr_vocals = calculate_sdr(
+                reference_vocals[:min_len], vocals_audio[:min_len])
+            sdr_instruments = calculate_sdr(
+                reference_instruments[:min_len], instruments_audio[:min_len])
+
+            print(f"SDR for vocals: {sdr_vocals:.2f} dB")
+            print(f"SDR for instruments: {sdr_instruments:.2f} dB")
     else:
         print("Skipping saving due to errors during audio reconstruction.")
 
@@ -146,7 +174,8 @@ def main():
         required=True,
         help="Path to the trained STFT model .pth file.",
     )
-    parser.add_argument("--input_wav", type=str, required=True, help="Path to the input mix WAV file.")
+    parser.add_argument("--input_wav", type=str, required=True,
+                        help="Path to the input mix WAV file.")
     parser.add_argument(
         "--output_vocals",
         type=str,
@@ -159,14 +188,28 @@ def main():
         required=True,
         help="Base path to save the output instruments WAV file (e.g., output/song_instruments.wav). _stft will be added automatically.",
     )
+    parser.add_argument("--ref_vocals", type=str,
+                        help="Path to reference vocals file (optional)")
+    parser.add_argument("--ref_instruments", type=str,
+                        help="Path to reference instruments file (optional)")
 
     args = parser.parse_args()
+
+    # Load reference files if provided
+    reference_vocals = None
+    reference_instruments = None
+    if args.ref_vocals and args.ref_instruments:
+        print("Loading reference files...")
+        reference_vocals = load_audio(args.ref_vocals)
+        reference_instruments = load_audio(args.ref_instruments)
 
     predict_wav(
         model_path=args.model,
         input_wav=args.input_wav,
         output_vocals_wav=args.output_vocals,
         output_instruments_wav=args.output_instruments,
+        reference_vocals=reference_vocals,
+        reference_instruments=reference_instruments,
     )
 
 

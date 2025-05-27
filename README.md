@@ -7,6 +7,7 @@ This project focuses on separating audio tracks into **vocal** and **accompanime
 ## 🧠 Objective
 
 Train a model capable of separating a mixed music track into:
+
 - **Vocal track**
 - **Accompaniment track** (everything else)
 
@@ -21,12 +22,14 @@ Train a model capable of separating a mixed music track into:
 ## 🔧 Setup
 
 1.  **Clone the repository:**
+
     ```bash
     git clone https://github.com/your-username/aidl-2025-music-stem-separator.git # Replace with your repo URL if different
     cd aidl-2025-music-stem-separator
     ```
 
 2.  **Create a virtual environment (recommended):**
+
     ```bash
     python3 -m venv venv
     source venv/bin/activate  # On Windows use `venv\Scripts\activate`
@@ -43,37 +46,65 @@ Follow these steps in order:
 
 **1. Download Sample Data (Optional):**
 
-   If you don't have your own audio data, you can download some sample tracks. This script will download them into the `sample_data/musdb/` directory.
+If you don't have your own audio data, you can download some sample tracks. This script will download them into the `sample_data/musdb/` directory.
 
-   ```bash
-   python sample_downloader/download.py
-   ```
+```bash
+python sample_downloader/download.py
+```
 
 **2. Convert Audio to Spectrograms:**
 
-   This script converts the raw audio files into STFT spectrograms (`.npy` files) and saves them to the specified output directory (default: `sample_data/musdb/spectrograms/`).
+This script converts the raw audio files into STFT spectrograms (`.npy` files) and saves them to the specified output directory (default: `sample_data/musdb/spectrograms/`).
 
-   ```bash
-   python converter/convert.py 
-   ```
+```bash
+python converter/convert.py
+```
 
 **3. Train a Model:**
 
-   Train a U-Net model using the generated spectrograms. Choose the type (`stft`) and specify the directory containing the corresponding `.npy` files.
+Train a U-Net model using the generated spectrograms. Choose the type (`stft`) and specify the directory containing the corresponding `.npy` files.
 
-   *   **Train STFT Model:**
-       ```bash
-       python train.py --type stft --spectrogram_dir sample_data/spectrograms_stft --epochs 50 --batch_size 8 --lr 0.001 --val_split 0.2
-       ```
-       *(Model saved to `u_net_stft/unet_small_stft.pth`, plot saved to `u_net_stft/unet_small_stft_loss_curve.png`)*
+- **Train STFT Model:**
+  ```bash
+  python train.py --type stft --spectrogram_dir sample_data/spectrograms_stft --epochs 50 --batch_size 8 --lr 0.001 --val_split 0.2
+  ```
+  _(Model saved to `u_net_stft/unet_small_stft.pth`, plot saved to `u_net_stft/unet_small_stft_loss_curve.png`)_
 
-   *Adjust `--epochs`, `--batch_size`, `--lr`, and `--val_split` as needed.*
+_Adjust `--epochs`, `--batch_size`, `--lr`, and `--val_split` as needed._
 
 **4. Predict (Separate Stems):**
+
+Use the prediction script to separate vocals and instruments from a mix WAV file using a trained model. Example:
+
+```bash
+python predict_wav.py \
+    --model u_net_stft/unet_small_stft.pth \
+    --input_wav path/to/mix.wav \
+    --output_vocals output/pred_vocals.wav \
+    --output_instruments output/pred_instruments.wav
+```
+
+This will generate `output/pred_vocals_stft.wav` and `output/pred_instruments_stft.wav`.
+
+**5. Analyze Separation Results:**
+
+Use the analysis script to evaluate the quality of the separation. You can provide the original mix, the predicted stems, and (optionally) reference stems for SDR and detailed analysis:
+
+```bash
+python analyze_separation.py \
+    --mix path/to/mix.wav \
+    --vocals output/pred_vocals_stft.wav \
+    --instruments output/pred_instruments_stft.wav \
+    --ref_vocals path/to/reference_vocals.wav \
+    --ref_instruments path/to/reference_instruments.wav
+```
+
+This will print a detailed analysis and save a visualization as `separation_analysis.png`.
 
 ## 📦 Dataset (MUSDB18)
 
 While sample data scripts are provided, this project is designed with the [MUSDB18 dataset](https://sigsep.github.io/datasets/musdb.html) in mind for more robust training.
+
 - Download it manually if desired.
 - You will need to adapt the `converter/convert.py` script or your workflow to process the MUSDB18 structure and place the generated spectrograms in a location accessible by `train.py`.
 
