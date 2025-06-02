@@ -14,6 +14,8 @@ from tqdm import tqdm
 
 from u_net_stft.dataset import StftSpectrogramDataset
 from u_net_stft.model import UNetSmall as StftUNet
+from u_net_stft.h5_dataset import H5SpectrogramDataset
+from u_net_stft.augment import spec_augment
 
 # Suppress all UserWarnings containing GradScaler + CUDA
 warnings.filterwarnings(
@@ -49,7 +51,7 @@ def train(
     model_class,
     dataset_class,
     model_save_path,
-    spectrogram_dir,
+    dataset_args,
     num_epochs=50,
     batch_size=8,
     lr=1e-3,
@@ -63,7 +65,7 @@ def train(
         model_class: U-Net model class to instantiate.
         dataset_class: Dataset class to instantiate.
         model_save_path: File path to save the trained model.
-        spectrogram_dir: Directory with .npy spectrograms.
+        dataset_args: dict of arguments for the dataset (e.g. h5_path, transform)
         num_epochs: Number of training epochs.
         batch_size: Number of samples per training batch.
         lr: Learning rate.
@@ -78,13 +80,14 @@ def train(
     logging.debug(device_message)
 
     # Load full dataset
-    full_dataset = dataset_class(spectrogram_dir)
+    full_dataset = dataset_class(**dataset_args)
 
     # Split dataset into training and validation
     dataset_size = len(full_dataset)
     val_size = int(dataset_size * val_split)
     train_size = dataset_size - val_size
-    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+    train_dataset, val_dataset = random_split(
+        full_dataset, [train_size, val_size])
 
     set_size = f"Training set size: {train_size}"
     validation_size = f"Validation set size: {val_size}"
@@ -146,7 +149,8 @@ def train(
             desc=f"Epoch {epoch + 1}/{num_epochs} - Train",
             leave=False,
         ):
-            mix, vocals, instruments = mix.to(device), vocals.to(device), instruments.to(device)
+            mix, vocals, instruments = mix.to(device), vocals.to(
+                device), instruments.to(device)
 
             optimizer.zero_grad()
 
@@ -187,7 +191,8 @@ def train(
                 desc=f"Epoch {epoch + 1}/{num_epochs} - Val",
                 leave=False,
             ):
-                mix, vocals, instruments = mix.to(device), vocals.to(device), instruments.to(device)
+                mix, vocals, instruments = mix.to(device), vocals.to(
+                    device), instruments.to(device)
 
                 # Use autocast only if enabled, but don't compute gradients
                 with autocast(device_type=device.type, enabled=(device.type in ["cuda", "mps"])):
@@ -212,7 +217,8 @@ def train(
         logging.debug(message)
 
         # Save checkpoint for this epoch
-        epoch_ckpt_path = model_save_path.replace(".pth", f"_epoch_{epoch + 1}.pth")
+        epoch_ckpt_path = model_save_path.replace(
+            ".pth", f"_epoch_{epoch + 1}.pth")
         torch.save(model.state_dict(), epoch_ckpt_path)
         checkopoint_saved = f"Checkpoint saved at {epoch_ckpt_path}"
         print(checkopoint_saved)
@@ -250,7 +256,6 @@ def train(
     # plt.show()
 
     # --- Save results to CSV ---
-    # ... (Keep the CSV saving logic here as implemented before) ...
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     model_type = "stft"
     final_train_loss = train_losses[-1] if train_losses else float("nan")
@@ -306,17 +311,27 @@ def main():
     Main CLI entry point.
     Parses command line arguments and starts training.
     """
-    parser = argparse.ArgumentParser(description="Train U-Net on STFT spectrograms.")
+    parser = argparse.ArgumentParser(
+        description="Train U-Net on STFT spectrograms or .h5 spectrograms.")
 
     parser.add_argument(
         "--spectrogram_dir",
         type=str,
-        default="sample_data/spectrograms",
-        help="Directory where spectrogram .npy files are stored.",
+        default=None,
+        help="Directory where spectrogram .npy files are stored (for legacy .npy pipeline).",
     )
-    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size during training.")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate for optimizer.")
+    parser.add_argument(
+        "--h5_path",
+        type=str,
+        default=None,
+        help="Path to .h5 file with spectrograms (recommended).",
+    )
+    parser.add_argument("--epochs", type=int, default=50,
+                        help="Number of training epochs.")
+    parser.add_argument("--batch_size", type=int, default=8,
+                        help="Batch size during training.")
+    parser.add_argument("--lr", type=float, default=1e-3,
+                        help="Learning rate for optimizer.")
     parser.add_argument(
         "--val_split",
         type=float,
@@ -330,7 +345,19 @@ def main():
     args = parser.parse_args()
 
     model_class = StftUNet
-    dataset_class = StftSpectrogramDataset
+    # Decide dataset
+    if args.h5_path is not None:
+        dataset_class = H5SpectrogramDataset
+        dataset_args = {"h5_path": args.h5_path, "transform": spec_augment}
+        print(f"Using H5SpectrogramDataset with {args.h5_path}")
+    elif args.spectrogram_dir is not None:
+        dataset_class = StftSpectrogramDataset
+        dataset_args = {"spectrogram_dir": args.spectrogram_dir}
+        print(f"Using StftSpectrogramDataset with {args.spectrogram_dir}")
+    else:
+        raise ValueError(
+            "You must provide either --h5_path or --spectrogram_dir")
+
     model_save_path = StftUNet.MODEL_SAVE_PATH
 
     # Start training
@@ -338,7 +365,7 @@ def main():
         model_class=model_class,
         dataset_class=dataset_class,
         model_save_path=model_save_path,
-        spectrogram_dir=args.spectrogram_dir,
+        dataset_args=dataset_args,
         num_epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
