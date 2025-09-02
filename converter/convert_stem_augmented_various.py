@@ -14,8 +14,8 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from sample_downloader.download import MUSDB_SAMPLE_OUTPUT_PATH
 
 # --- Configurable constants ---
-SPECTROGRAM_OUTPUT_PATH = "{}/sample_data/spectrograms_augmented_various"  # Different output folder
-WAVEFORM_OUTPUT_PATH = "{}/sample_data/waveforms_augmented_various"  # Different output folder
+SPECTROGRAM_OUTPUT_PATH = "{}/sample_data/spectrograms_augmented_various_chunks_6s"  # Different output folder
+WAVEFORM_OUTPUT_PATH = "{}/sample_data/waveforms_augmented_various_chunks_6s"  # Different output folder
 
 # Reduced parameters for memory efficiency
 TARGET_SR = 22050  # Reduced sample rate (from 44100)
@@ -250,20 +250,24 @@ def process_file(file: Path, spectrogram_dir: Path, waveform_dir: Path, all_trai
         sr = TARGET_SR
         
         # Process original version in chunks
+        print(f"Processing original version of {file.name}")
         process_audio_in_chunks(mix, sr, file.stem, "original", spectrogram_dir, waveform_dir)
         
         # For training files, create synthetic versions
         if "train" in str(file):
+            print(f"Creating synthetic versions for {file.name}")
             target_duration = len(mix) // sr  # Duration in seconds
             
             # Create synthetic versions
             for i in range(N_SYNTHETIC_SONGS):
                 try:
+                    print(f"Creating synthetic version {i+1} for {file.name}")
                     # Randomly select source files for mixing
                     source_files = random.sample(all_training_files, min(N_SOURCE_SONGS, len(all_training_files)))
                     source_songs = []
                     
                     # Read stems from source files
+                    print(f"Reading source files for synthetic version {i+1}")
                     for src_file in source_files:
                         src_audio, src_sr = stempeg.read_stems(str(src_file), stem_id=[0, 3, 4])
                         # Add each stem type (mix, accompaniment, vocals) as a potential source
@@ -274,19 +278,24 @@ def process_file(file: Path, spectrogram_dir: Path, waveform_dir: Path, all_trai
                         ])
                     
                     # Create synthetic version
+                    print(f"Creating mixed synthetic version {i+1}")
                     synthetic = create_synthetic_song_from_multiple(source_songs, target_duration)
                     
                     # Process synthetic version in chunks
+                    print(f"Processing synthetic version {i+1} in chunks")
                     process_audio_in_chunks(synthetic, sr, file.stem, f"synthetic_mix_{i+1}", 
                                          spectrogram_dir, waveform_dir)
                     
+                    print(f"Finished synthetic version {i+1} for {file.name}")
                 except Exception as e:
-                    print(f"Warning: Failed to create synthetic song {i+1}: {e}")
+                    print(f"Error creating synthetic version {i+1} for {file.name}: {e}")
+                    print(f"Error details: {str(e)}")
         
-        print(f"Finished {file.name}")
+        print(f"Finished processing {file.name}")
         
     except Exception as e:
         print(f"Error processing {file.name}: {e}")
+        print(f"Error details: {str(e)}")
 
 def convert():
     """Main entry point to process all audio stems into spectrogram and waveform images."""
